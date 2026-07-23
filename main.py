@@ -21,18 +21,31 @@ IMAGE_URL = os.environ["IMAGE_URL"] # Public gh-pages image link
 # ---------------------------------------------------------------------------
 def get_pending_submission():
     print("Fetching submissions from Google Sheet...")
-    df = pd.read_csv(SHEET_CSV_URL)
     
-    # Assumes your sheet has a 'Status' column and a 'Submission' column
-    pending = df[df['Status'] == 'Pending']
+    # Read the Google Sheet export CSV
+    df = pd.read_csv(
+        SHEET_CSV_URL,
+        engine='python' # Python engine handles multi-line strings and quotes smoothly
+    )
     
+    # Example: filter for unprocessed rows (adjust column names to match your sheet)
+    # Assuming column 'Status' marks whether a post was published or not
+    if 'Status' in df.columns:
+        pending = df[df['Status'].isna() | (df['Status'] == '')]
+    else:
+        pending = df  # fallback if no status column exists yet
+        
     if pending.empty:
-        print("No pending submissions found.")
+        print("No new pending submissions found.")
         return None
+
+    # Grab the oldest unposted submission (first row)
+    latest_row = pending.iloc[0]
     
-    # Grab the oldest pending post
-    first_row = pending.iloc[0]
-    return first_row['Submission']
+    # Replace 'Spotted Text' with your actual form column name for the post content
+    submission_text = latest_row.get('Spotted Text', latest_row.iloc[1]) 
+    
+    return submission_text
 
 # ---------------------------------------------------------------------------
 # STEP 2: MODERATE & FORMAT WITH GEMINI API
