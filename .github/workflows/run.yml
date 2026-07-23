@@ -34,6 +34,7 @@ jobs:
 
       - name: Esegui Bot Python
         env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}  # MUST be secrets.GCP_SA_KEY
           SHEET_CSV_URL: ${{ secrets.SHEET_CSV_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
