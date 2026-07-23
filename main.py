@@ -7,6 +7,8 @@ from PIL import Image, ImageDraw, ImageFont
 from google import genai
 from google.genai import types
 
+from dotenv import load_dotenv
+load_dotenv()  # Reads the .env file if running locally!    
 # ---------------------------------------------------------------------------
 # CONFIGURATION & ENVIRONMENT SECRETS
 # ---------------------------------------------------------------------------
@@ -95,7 +97,8 @@ def process_with_gemini(text):
     
     Task:
     1. Moderation: Reject if it contains slurs, severe harassment, or explicit personal contact info (doxxing).
-    2. Format: Shorten/clean the quote for an image card (max 30 words).
+    Also reject scam links.
+    2. Format: Keep the the quote as is for an image card.
     3. Caption: Write a short, engaging Instagram caption with 3-5 relevant hashtags.
     
     For card_text and caption, write them in the language of the original submission.
@@ -265,7 +268,7 @@ def publish_to_instagram(caption):
 # MAIN EXECUTION
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    raw_submission = get_pending_submission(debug=True)
+    raw_submission = get_pending_submission()
     
     if raw_submission:
         ai_result = process_with_gemini(raw_submission)
