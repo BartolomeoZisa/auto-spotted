@@ -22,7 +22,7 @@ IMAGE_URL = os.environ["IMAGE_URL"] # Public gh-pages image link
 def get_pending_submission(debug=False):
     if debug:
         print("Fetching submissions from Google Sheet...")
-        print(f"DEBUG - Fetching from URL: {SHEET_CSV_URL[:60]}...")
+        #print(f"DEBUG - Full URL: {SHEET_CSV_URL}") # <--- Printed fully now!
     
     try:
         df = pd.read_csv(SHEET_CSV_URL, engine='python')
@@ -211,8 +211,6 @@ def generate_image(text, output_path="latest_post.jpg"):
     text_x = bubble_x + bubble_paddings[3]
     text_y = bubble_y + bubble_paddings[0]
     
-    # The example text we are generating, as suggested by the example file image_2.png
-    sample_text = "📍 SPOTTED\nSaw you drinking coffee in the library looking incredibly productive. You've got my attention. #spotted #coffee 📍"
     
     # Measure final text for final placement adjustment
     text_bbox = draw_canvas.multiline_textbbox((0,0), formatted_text, font=font, spacing=15)
