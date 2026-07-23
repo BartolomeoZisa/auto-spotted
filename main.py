@@ -83,12 +83,12 @@ def update_sheet_status(row_number, status_value):
         if not raw_creds:
             raise ValueError("GCP_SA_KEY environment variable is missing!")
 
-        # Fix escape sequences for private keys pasted into secrets
-        raw_creds = raw_creds.replace("\\n", "\n")
+        creds_dict = json.loads(raw_creds)  # parse the untouched JSON first
 
-        # Parse string as JSON dictionary
-        creds_dict = json.loads(raw_creds)
-        
+        # only fix newlines inside private_key, after parsing, if needed
+        if isinstance(creds_dict.get("private_key"), str):
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
         # Authenticate with dictionary instead of filename
         gc = gspread.service_account_from_dict(creds_dict)
         sh = gc.open_by_key(SPREADSHEET_ID)
