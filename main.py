@@ -219,9 +219,12 @@ def generate_image(text, output_path="latest_post.jpg"):
 # ---------------------------------------------------------------------------
 # STEP 4: PUBLISH TO INSTAGRAM VIA GRAPH API
 # ---------------------------------------------------------------------------
+import time
+
 def publish_to_instagram(caption):
     print("Publishing to Instagram...")
     
+    # 1. Create Media Container
     container_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media"
     container_payload = {
         'image_url': IMAGE_URL,
@@ -235,7 +238,30 @@ def publish_to_instagram(caption):
         return False
         
     creation_id = res['id']
-    
+    print(f"Container created (ID: {creation_id}). Checking status...")
+
+    # 2. Poll Container Status until READY or timeout
+    status_url = f"https://graph.instagram.com/v21.0/{creation_id}"
+    status_params = {
+        'fields': 'status_code,status',
+        'access_token': META_ACCESS_TOKEN
+    }
+
+    max_attempts = 10
+    for attempt in range(max_attempts):
+        time.sleep(3)  # Wait 3 seconds between status checks
+        status_res = requests.get(status_url, params=status_params).json()
+        status_code = status_res.get('status_code')
+        
+        print(f"Status check {attempt + 1}: {status_code}")
+
+        if status_code == 'FINISHED':
+            break
+        elif status_code == 'ERROR':
+            print("Media processing failed on Instagram's side:", status_res)
+            return False
+
+    # 3. Publish Container
     publish_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media_publish"
     publish_payload = {
         'creation_id': creation_id,
@@ -249,7 +275,6 @@ def publish_to_instagram(caption):
     else:
         print("Error publishing post:", pub_res)
         return False
-
 # ---------------------------------------------------------------------------
 # MAIN EXECUTION
 # ---------------------------------------------------------------------------
