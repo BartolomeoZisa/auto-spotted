@@ -2,7 +2,7 @@ name: Spotted Bot Automation
 
 on:
   schedule:
-    # Esegue lo script ogni 6 ore (puoi cambiare gli orari)
+    # Esegue lo script ogni 6 ore
     - cron: '0 */6 * * *'
   workflow_dispatch: # Permette di avviare il bot manualmente con un pulsante su GitHub
 
@@ -21,11 +21,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
 
       - name: Installa dipendenze
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Crea credentials.json dal secret
+        run: |
+          echo "${{ secrets.GCP_SA_KEY }}" > credentials.json
 
       - name: Esegui Bot Python
         env:
@@ -34,6 +39,8 @@ jobs:
           META_ACCESS_TOKEN: ${{ secrets.META_ACCESS_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
           IMAGE_URL: ${{ secrets.IMAGE_URL }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_SERVICE_ACCOUNT_FILE: "credentials.json"
         run: python main.py
 
       - name: Commit e Push dell'immagine generata
