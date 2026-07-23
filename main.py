@@ -241,7 +241,7 @@ def publish_to_instagram(caption):
     print("Publishing to Instagram...")
     
     # 1. Create Media Container
-    container_url = f"https://graph.facebook.com/v21.0/{IG_USER_ID}/media"
+    container_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media"
     container_payload = {
         'image_url': IMAGE_URL,
         'caption': caption,
@@ -256,7 +256,7 @@ def publish_to_instagram(caption):
     creation_id = res['id']
     
     # 2. Publish Media
-    publish_url = f"https://graph.facebook.com/v21.0/{IG_USER_ID}/media_publish"
+    publish_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media_publish"
     publish_payload = {
         'creation_id': creation_id,
         'access_token': META_ACCESS_TOKEN
