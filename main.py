@@ -22,28 +22,29 @@ IMAGE_URL = os.environ["IMAGE_URL"] # Public gh-pages image link
 def get_pending_submission():
     print("Fetching submissions from Google Sheet...")
     
-    # Read the Google Sheet export CSV
-    df = pd.read_csv(
-        SHEET_CSV_URL,
-        engine='python' # Python engine handles multi-line strings and quotes smoothly
-    )
+    df = pd.read_csv(SHEET_CSV_URL, engine='python')
     
-    # Example: filter for unprocessed rows (adjust column names to match your sheet)
-    # Assuming column 'Status' marks whether a post was published or not
+    # Strip any extra whitespace from column names just in case
+    df.columns = df.columns.str.strip()
+    
     if 'Status' in df.columns:
-        pending = df[df['Status'].isna() | (df['Status'] == '')]
-    else:
-        pending = df  # fallback if no status column exists yet
+        # Fill NaN with empty string and clean whitespace
+        status_series = df['Status'].fillna('').astype(str).str.strip().str.lower()
         
+        # Match "pending", empty strings, or unassigned rows
+        pending = df[status_series.isin(['pending', ''])]
+    else:
+        pending = df
+
     if pending.empty:
         print("No new pending submissions found.")
         return None
 
-    # Grab the oldest unposted submission (first row)
+    # Grab the oldest pending submission
     latest_row = pending.iloc[0]
     
-    # Replace 'Spotted Text' with your actual form column name for the post content
-    submission_text = latest_row.get('Spotted Text', latest_row.iloc[1]) 
+    # Target your specific text column: 'Chi o cosa vuoi spottare?'
+    submission_text = latest_row.get('Chi o cosa vuoi spottare?', latest_row.iloc[1])
     
     return submission_text
 

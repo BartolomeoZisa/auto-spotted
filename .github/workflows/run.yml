@@ -2,8 +2,8 @@ name: Spotted Bot Automation
 
 on:
   schedule:
-    # Runs every day at 12:00 PM UTC
-    - cron: '0 12 * * *'
+    # Esegue lo script ogni 6 ore (puoi cambiare gli orari)
+    - cron: '0 */6 * * *'
   workflow_dispatch: # Permette di avviare il bot manualmente con un pulsante su GitHub
 
 permissions:
