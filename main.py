@@ -50,6 +50,9 @@ def process_with_gemini(text):
     2. Format: Shorten/clean the quote for an image card (max 30 words).
     3. Caption: Write a short, engaging Instagram caption with 3-5 relevant hashtags.
     
+    For card_text and caption, write them in the language of the original submission.
+    For approved, return true or false.
+
     Return STRICT JSON:
     {{
       "approved": true,
@@ -71,27 +74,117 @@ def process_with_gemini(text):
 # ---------------------------------------------------------------------------
 def generate_image(text, output_path="latest_post.jpg"):
     print("Generating image card...")
-    # Create 1080x1080 canvas (Instagram square)
-    img = Image.new('RGB', (1080, 1080), color='#0F172A') # Dark slate background
-    draw = ImageDraw.Draw(img)
     
-    # Basic text-wrapping logic
-    font = ImageFont.load_default()
-    margin = 80
-    offset = 450
+    # 1. Image Base (White with solid Border)
+    # 1080x1080 square for Instagram
+    border_width = 100
+    base_color = "#FFFFFF" # Main internal canvas (white)
+    border_color = "#0F172A" # Different sophisticated border color (Midnight Blue)
     
-    # Draw simple centered/wrapped text box
-    draw.multiline_text(
-        (margin, offset), 
-        text, 
-        fill='#F8FAFC', 
-        font=font, 
-        spacing=10
+    img = Image.new('RGB', (1080, 1080), color=border_color)
+    draw_canvas = ImageDraw.Draw(img)
+    
+    # Draw internal white rectangle
+    canvas_top_left = (border_width, border_width)
+    canvas_bottom_right = (1080 - border_width, 1080 - border_width)
+    draw_canvas.rectangle([canvas_top_left, canvas_bottom_right], fill=base_color)
+
+    # 2. Text Container (Bubble) - mimic the structure of the prompt reference
+    bubble_color = "#F1F5F9" # Light grey bubble
+    bubble_paddings = (60, 60, 60, 60) # T, R, B, L
+    
+    # Define Font (prefer truetype for clean looks)
+    try:
+        font = ImageFont.truetype("DejaVuSans-Bold.ttf", 45)
+    except IOError:
+        font = ImageFont.load_default()
+        print("Warning: Arial not found. Using default font.")
+
+    # Measure text for centering and bubble sizing
+    wrapped_lines = []
+    max_line_width = 0
+    words = text.split()
+    current_line = []
+    
+    for word in words:
+        current_line.append(word)
+        line_text = " ".join(current_line)
+        line_bbox = draw_canvas.textbbox((0, 0), line_text, font=font)
+        line_w = line_bbox[2] - line_bbox[0]
+        
+        if line_w > (1080 - 2 * border_width - bubble_paddings[1] - bubble_paddings[3]):
+            # Start new line
+            wrapped_lines.append(" ".join(current_line[:-1]))
+            current_line = [word]
+        else:
+            if line_w > max_line_width:
+                max_line_width = line_w
+                
+    wrapped_lines.append(" ".join(current_line)) # Add the final line
+    formatted_text = "\n".join(wrapped_lines)
+
+    # Text measurement for the bubble
+    text_bbox = draw_canvas.multiline_textbbox((0, 0), formatted_text, font=font, spacing=15)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+
+    # Bubble Dimensions
+    bubble_w = text_w + bubble_paddings[1] + bubble_paddings[3]
+    bubble_h = text_h + bubble_paddings[0] + bubble_paddings[2]
+    
+    # Position bubble centrally on the white canvas
+    bubble_x = (1080 - bubble_w) // 2
+    bubble_y = (1080 - bubble_h) // 2
+    
+    # Draw bubble (rounded rectangle)
+    bubble_radius = 25
+    draw_canvas.rounded_rectangle(
+        [(bubble_x, bubble_y), (bubble_x + bubble_w, bubble_y + bubble_h)],
+        fill=bubble_color,
+        radius=bubble_radius,
+        outline=None,
     )
     
+    # Add subtle shadow for depth
+    shadow_offset = (5, 5)
+    shadow_color = (200, 200, 200, 100)
+    shadow_image = Image.new('RGBA', img.size, (255, 255, 255, 0))
+    shadow_draw = ImageDraw.Draw(shadow_image)
+    shadow_draw.rounded_rectangle(
+        [(bubble_x + shadow_offset[0], bubble_y + shadow_offset[1]), 
+         (bubble_x + bubble_w + shadow_offset[0], bubble_y + bubble_h + shadow_offset[1])],
+        fill=shadow_color,
+        radius=bubble_radius
+    )
+    img = Image.alpha_composite(img.convert("RGBA"), shadow_image).convert("RGB")
+    draw_canvas = ImageDraw.Draw(img) # Refresh draw object after compositing
+
+    # 3. Text rendering inside bubble
+    text_x = bubble_x + bubble_paddings[3]
+    text_y = bubble_y + bubble_paddings[0]
+    
+    # The example text we are generating, as suggested by the example file image_2.png
+    sample_text = "📍 SPOTTED\nSaw you drinking coffee in the library looking incredibly productive. You've got my attention. #spotted #coffee 📍"
+    
+    # Measure final text for final placement adjustment
+    text_bbox = draw_canvas.multiline_textbbox((0,0), formatted_text, font=font, spacing=15)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+    
+    # Redraw multiline text inside bubble with specified spacing and font
+    # Anchor is "la" (left-aligned) by default for multiline
+    draw_canvas.multiline_text(
+        (text_x, text_y), 
+        formatted_text, 
+        fill=border_color, # Same color as the border
+        font=font, 
+        spacing=15,
+        align="left"
+    )
+
     img.save(output_path)
     print(f"Image saved to {output_path}")
-
+ 
 # ---------------------------------------------------------------------------
 # STEP 4: PUBLISH TO INSTAGRAM VIA GRAPH API
 # ---------------------------------------------------------------------------
