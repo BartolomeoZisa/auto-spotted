@@ -30,8 +30,7 @@ jobs:
 
       - name: Crea credentials.json dal secret
         run: |
-          echo "${{ secrets.GCP_SA_KEY }}" > credentials.json
-
+          echo '${{ secrets.GCP_SA_KEY }}' > credentials.json
       - name: Esegui Bot Python
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}  # MUST be secrets.GCP_SA_KEY

@@ -77,29 +77,32 @@ def update_sheet_status(row_number, status_value):
     """
     print(f"Updating Google Sheet row {row_number} status to '{status_value}'...")
     try:
-        # Fetch raw JSON string from GitHub Secret / Env Var
-        raw_creds = os.environ.get("GCP_SA_KEY", "")
+        # Check if local credentials file exists (created by GitHub Actions workflow step)
+        creds_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
         
-        if not raw_creds:
-            raise ValueError("GCP_SA_KEY environment variable is missing!")
+        if os.path.exists(creds_file):
+            # Authenticate directly using the file
+            gc = gspread.service_account(filename=creds_file)
+        else:
+            # Fallback for local execution using raw JSON string from .env
+            raw_creds = os.environ.get("GCP_SA_KEY", "")
+            if not raw_creds:
+                raise ValueError("Neither credentials.json nor GCP_SA_KEY is available!")
+            
+            creds_dict = json.loads(raw_creds)
+            if isinstance(creds_dict.get("private_key"), str):
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            gc = gspread.service_account_from_dict(creds_dict)
 
-        creds_dict = json.loads(raw_creds)  # parse the untouched JSON first
-
-        # only fix newlines inside private_key, after parsing, if needed
-        if isinstance(creds_dict.get("private_key"), str):
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-
-        # Authenticate with dictionary instead of filename
-        gc = gspread.service_account_from_dict(creds_dict)
         sh = gc.open_by_key(SPREADSHEET_ID)
-        worksheet = sh.get_worksheet(0) # Selects first tab/sheet
+        worksheet = sh.get_worksheet(0)  # Selects first tab/sheet
         
         # Column 3 corresponds to Column 'C'
         worksheet.update_cell(row_number, 3, status_value)
         print(f"✅ Sheet updated successfully for row {row_number}.")
     except Exception as e:
         print(f"❌ Failed to update Google Sheet status: {e}")
-
+        
 # ---------------------------------------------------------------------------
 # STEP 2: MODERATE & FORMAT WITH GEMINI API
 # ---------------------------------------------------------------------------
