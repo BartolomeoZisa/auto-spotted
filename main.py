@@ -19,33 +19,67 @@ IMAGE_URL = os.environ["IMAGE_URL"] # Public gh-pages image link
 # ---------------------------------------------------------------------------
 # STEP 1: READ SUBMISSIONS FROM GOOGLE SHEET CSV EXPORT
 # ---------------------------------------------------------------------------
-def get_pending_submission():
-    print("Fetching submissions from Google Sheet...")
+def get_pending_submission(debug=False):
+    if debug:
+        print("Fetching submissions from Google Sheet...")
+        print(f"DEBUG - Fetching from URL: {SHEET_CSV_URL[:60]}...")
     
-    df = pd.read_csv(SHEET_CSV_URL, engine='python')
-    
-    # Strip any extra whitespace from column names just in case
+    try:
+        df = pd.read_csv(SHEET_CSV_URL, engine='python')
+    except Exception as e:
+        if debug:
+            print(f"❌ DEBUG - Error reading CSV: {e}")
+        return None
+
+    # Clean whitespace from column headers
     df.columns = df.columns.str.strip()
     
+    if debug:
+        print("\n--- 🔍 DEBUG INFO ---")
+        print(f"Total rows retrieved: {len(df)}")
+        print(f"Detected columns: {list(df.columns)}")
+        print("\nRaw Data Snippet:")
+        print(df.to_string())
+        print("---------------------\n")
+
+    if df.empty:
+        if debug:
+            print("⚠️ DEBUG - Dataframe is completely empty!")
+        return None
+
     if 'Status' in df.columns:
-        # Fill NaN with empty string and clean whitespace
+        # Normalize status column values
         status_series = df['Status'].fillna('').astype(str).str.strip().str.lower()
+        if debug:
+            print(f"DEBUG - Unique values in 'Status' column: {status_series.unique()}")
         
-        # Match "pending", empty strings, or unassigned rows
+        # Match 'pending' or empty values
         pending = df[status_series.isin(['pending', ''])]
     else:
+        if debug:
+            print("⚠️ DEBUG - 'Status' column not found! Treating all rows as pending.")
         pending = df
+
+    if debug:
+        print(f"DEBUG - Pending rows found: {len(pending)}")
 
     if pending.empty:
         print("No new pending submissions found.")
         return None
 
-    # Grab the oldest pending submission
+    # Pick the first pending row
     latest_row = pending.iloc[0]
     
-    # Target your specific text column: 'Chi o cosa vuoi spottare?'
-    submission_text = latest_row.get('Chi o cosa vuoi spottare?', latest_row.iloc[1])
-    
+    # Target text column
+    target_col = 'Chi o cosa vuoi spottare?'
+    if target_col in df.columns:
+        submission_text = latest_row[target_col]
+    else:
+        submission_text = latest_row.iloc[1]
+
+    if debug:
+        print(f"✅ DEBUG - Selected submission: '{submission_text}'")
+        
     return submission_text
 
 # ---------------------------------------------------------------------------
@@ -233,7 +267,7 @@ def publish_to_instagram(caption):
 # MAIN EXECUTION
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    raw_submission = get_pending_submission()
+    raw_submission = get_pending_submission(debug=True)
     
     if raw_submission:
         ai_result = process_with_gemini(raw_submission)
