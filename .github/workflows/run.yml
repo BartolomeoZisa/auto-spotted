@@ -49,13 +49,25 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add post_*.jpg || true
           git add -u post_*.jpg || true
-          git commit -m "Add new timestamped post image & clean old posts" || echo "No changes to commit"
+          git commit -m "Add timestamped post image and remove previous image" || echo "No changes to commit"
           git push
 
-      - name: Step 3 - Wait for GitHub Pages propagation
-        run: sleep 10
+      - name: Step 3 - Wait for GitHub Pages build
+        run: |
+          echo "Waiting 60 seconds for GitHub Pages deployment..."
+          sleep 60
 
-      - name: Step 4 - Publish to Instagram
+      - name: Step 4 - Verify Image HTTP Availability
+        run: |
+          if [ -f pending_post.json ]; then
+            FILENAME=$(jq -r '.filename' pending_post.json)
+            BASE_URL=$(echo "${{ secrets.IMAGE_URL }}" | sed 's/*$//')
+            FULL_URL="$BASE_URL/$FILENAME"
+            echo "Checking availability for: $FULL_URL"
+            curl --fail -I "$FULL_URL" || (echo "Image is not live yet on GitHub Pages!" && exit 1)
+          fi
+
+      - name: Step 5 - Publish to Instagram
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           SHEET_CSV_URL: ${{ secrets.SHEET_CSV_URL }}

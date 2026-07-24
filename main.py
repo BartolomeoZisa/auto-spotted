@@ -22,7 +22,7 @@ SHEET_CSV_URL = os.environ["SHEET_CSV_URL"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 META_ACCESS_TOKEN = os.environ["META_ACCESS_TOKEN"]
 IG_USER_ID = os.environ["IG_USER_ID"]
-BASE_IMAGE_URL = os.environ["IMAGE_URL"].rstrip('/') # e.g. https://username.github.io/repo
+BASE_IMAGE_URL = os.environ["IMAGE_URL"].rstrip('/') # e.g. https://bartolomeozisa.github.io/auto-spotted
 
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
@@ -55,7 +55,7 @@ def get_pending_submission(debug=True):
         return None, None
 
     first_pending_index = pending.index[0]
-    sheet_row_number = first_pending_index + 2  
+    sheet_row_number = int(first_pending_index) + 2  # Cast to standard int for JSON serialization
 
     latest_row = pending.iloc[0]
     submission_text = latest_row.iloc[1]
@@ -146,7 +146,7 @@ def process_with_gemini(text):
 # STEP 3: RENDER QUOTE IMAGE CARD & CLEANUP OLD IMAGES
 # ---------------------------------------------------------------------------
 def generate_image(text):
-    # Remove older generated post images to prevent git repository bloat
+    # Clean up previous timestamped post images to prevent git bloat
     for old_file in glob.glob("post_*.jpg"):
         try:
             os.remove(old_file)
@@ -154,7 +154,7 @@ def generate_image(text):
         except Exception as e:
             print(f"Could not remove {old_file}: {e}")
 
-    # Create timestamped filename
+    # Create new timestamped filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"post_{timestamp}.jpg"
     
@@ -178,6 +178,7 @@ def generate_image(text):
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 45)
     except IOError:
         font = ImageFont.load_default()
+        print("Warning: Default font used.")
 
     wrapped_lines = []
     max_line_width = 0
@@ -248,10 +249,11 @@ def generate_image(text):
     return filename
 
 # ---------------------------------------------------------------------------
-# STEP 4: PUBLISH TO INSTAGRAM
+# STEP 4: PUBLISH TO INSTAGRAM VIA GRAPH API
 # ---------------------------------------------------------------------------
 def publish_to_instagram(filename, caption):
-    full_image_url = f"{BASE_IMAGE_URL}/{filename}"
+    base_url = BASE_IMAGE_URL.rstrip('/')
+    full_image_url = f"{base_url}/{filename}"
     print(f"Publishing to Instagram with image URL: {full_image_url}")
     
     container_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media"
@@ -307,7 +309,7 @@ def publish_to_instagram(filename, caption):
 # MAIN EXECUTION
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Stage 1: Prepare image & state file
+    # Stage 1: Generate image & state file
     if len(sys.argv) == 1:
         raw_submission, row_number = get_pending_submission()
         
@@ -316,7 +318,6 @@ if __name__ == "__main__":
             
             if ai_result.get("approved"):
                 filename = generate_image(ai_result["card_text"])
-                # Save execution state for Stage 2 (Publishing)
                 with open("pending_post.json", "w") as f:
                     json.dump({
                         "filename": filename,
@@ -327,7 +328,7 @@ if __name__ == "__main__":
                 print("Submission rejected by Gemini safety moderation.")
                 update_sheet_status(row_number, "rejected")
 
-    # Stage 2: Publish after Git commit/push is complete
+    # Stage 2: Publish after Git push is live on GitHub Pages
     elif len(sys.argv) > 1 and sys.argv[1] == "--publish":
         if os.path.exists("pending_post.json"):
             with open("pending_post.json", "r") as f:
@@ -339,5 +340,4 @@ if __name__ == "__main__":
             else:
                 print("Failed to publish image to Instagram.")
             
-            # Clean up temporary execution state file
             os.remove("pending_post.json")
