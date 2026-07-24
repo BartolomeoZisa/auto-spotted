@@ -124,6 +124,7 @@ def process_with_gemini(text):
     - `caption`: A short, engaging Instagram caption with 3-5 relevant hashtags. If rejected, put an empty string `""`.
     - Write `card_text` and `caption` in the same language as the submission.
     - There's a form to send spotted messages, not dms, so don't include "DM me" or "message me" in the caption.
+    - You do not have information on time, so unless the submission explicitly mentions a time, do not include any time references in the caption.
 
     OUTPUT REQUIREMENTS:
     - Respond STRICTLY with valid JSON.
