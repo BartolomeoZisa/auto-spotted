@@ -52,22 +52,33 @@ jobs:
           git commit -m "Add timestamped post image and remove previous image" || echo "No changes to commit"
           git push
 
-      - name: Step 3 - Wait for GitHub Pages build
-        run: |
-          echo "Waiting 60 seconds for GitHub Pages deployment..."
-          sleep 60
-
-      - name: Step 4 - Verify Image HTTP Availability
+      - name: Step 3 - Poll and Verify Image Availability
         run: |
           if [ -f pending_post.json ]; then
             FILENAME=$(jq -r '.filename' pending_post.json)
-            BASE_URL=$(echo "${{ secrets.IMAGE_URL }}" | sed 's/*$//')
+            BASE_URL=$(echo "${{ secrets.IMAGE_URL }}" | sed 's/\/*$//')
             FULL_URL="$BASE_URL/$FILENAME"
-            echo "Checking availability for: $FULL_URL"
-            curl --fail -I "$FULL_URL" || (echo "Image is not live yet on GitHub Pages!" && exit 1)
+            
+            echo "Checking image availability at: $FULL_URL"
+            
+            SUCCESS=false
+            for i in {1..18}; do
+              if curl --output /dev/null --silent --head --fail "$FULL_URL"; then
+                echo "✅ Image is live on GitHub Pages!"
+                SUCCESS=true
+                break
+              fi
+              echo "Attempt $i/18: Not available yet. Retrying in 10s..."
+              sleep 10
+            done
+
+            if [ "$SUCCESS" = false ]; then
+              echo "❌ Image failed to become available on GitHub Pages in time."
+              exit 1
+            fi
           fi
 
-      - name: Step 5 - Publish to Instagram
+      - name: Step 4 - Publish to Instagram
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
           SHEET_CSV_URL: ${{ secrets.SHEET_CSV_URL }}

@@ -55,7 +55,7 @@ def get_pending_submission(debug=True):
         return None, None
 
     first_pending_index = pending.index[0]
-    sheet_row_number = int(first_pending_index) + 2  # Cast to standard int for JSON serialization
+    sheet_row_number = int(first_pending_index) + 2  # Cast NumPy int64 to standard Python int
 
     latest_row = pending.iloc[0]
     submission_text = latest_row.iloc[1]
@@ -146,7 +146,7 @@ def process_with_gemini(text):
 # STEP 3: RENDER QUOTE IMAGE CARD & CLEANUP OLD IMAGES
 # ---------------------------------------------------------------------------
 def generate_image(text):
-    # Clean up previous timestamped post images to prevent git bloat
+    # Remove older generated post images to prevent git repository bloat
     for old_file in glob.glob("post_*.jpg"):
         try:
             os.remove(old_file)
@@ -154,7 +154,7 @@ def generate_image(text):
         except Exception as e:
             print(f"Could not remove {old_file}: {e}")
 
-    # Create new timestamped filename
+    # Create timestamped filename
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"post_{timestamp}.jpg"
     
