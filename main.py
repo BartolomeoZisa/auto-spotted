@@ -321,7 +321,7 @@ if __name__ == "__main__":
                     json.dump({
                         "filename": filename,
                         "caption": ai_result["caption"],
-                        "row_number": row_number
+                        "row_number": int(row_number)
                     }, f)
             else:
                 print("Submission rejected by Gemini safety moderation.")
