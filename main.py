@@ -1,15 +1,19 @@
 import os
 import io
 import json
+import glob
+import sys
+import time
+from datetime import datetime
 import requests
 import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 from google import genai
 from google.genai import types
-import gspread  # For updating Google Sheets write status
+import gspread
 
 from dotenv import load_dotenv
-load_dotenv()  # Reads the .env file if running locally!    
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # CONFIGURATION & ENVIRONMENT SECRETS
@@ -18,16 +22,15 @@ SHEET_CSV_URL = os.environ["SHEET_CSV_URL"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 META_ACCESS_TOKEN = os.environ["META_ACCESS_TOKEN"]
 IG_USER_ID = os.environ["IG_USER_ID"]
-IMAGE_URL = os.environ["IMAGE_URL"] # Public gh-pages image link
+BASE_IMAGE_URL = os.environ["IMAGE_URL"].rstrip('/') # e.g. https://username.github.io/repo
 
-# Google Sheets Write Settings
 SPREADSHEET_ID = os.environ.get("SPREADSHEET_ID")
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
 
 # ---------------------------------------------------------------------------
-# STEP 1: READ SUBMISSIONS FROM GOOGLE SHEET CSV EXPORT
+# STEP 1: READ SUBMISSIONS FROM GOOGLE SHEET CSV
 # ---------------------------------------------------------------------------
-def get_pending_submission(debug=False):
+def get_pending_submission(debug=True):
     if debug:
         print("Fetching submissions from Google Sheet...")
     
@@ -43,10 +46,7 @@ def get_pending_submission(debug=False):
             print("⚠️ DEBUG - Dataframe is empty or lacks at least 3 columns!")
         return None, None
 
-    # Access Column 3 (Index 2) for status without relying on header string
     status_series = df.iloc[:, 2].fillna('').astype(str).str.strip().str.lower()
-
-    # Find pending or empty rows
     pending_mask = status_series.isin(['pending', ''])
     pending = df[pending_mask]
 
@@ -54,13 +54,10 @@ def get_pending_submission(debug=False):
         print("No new pending submissions found.")
         return None, None
 
-    # Pick the first pending row and get its 1-based index (+2 accounting for header)
     first_pending_index = pending.index[0]
     sheet_row_number = first_pending_index + 2  
 
     latest_row = pending.iloc[0]
-    
-    # Access Column 2 (Index 1) for submission text without hardcoded string
     submission_text = latest_row.iloc[1]
 
     if debug:
@@ -72,19 +69,13 @@ def get_pending_submission(debug=False):
 # STEP 1B: UPDATE STATUS IN GOOGLE SHEET
 # ---------------------------------------------------------------------------
 def update_sheet_status(row_number, status_value):
-    """
-    Updates Column 3 (Column C) for the specified row with 'posted' or 'rejected'.
-    """
     print(f"Updating Google Sheet row {row_number} status to '{status_value}'...")
     try:
-        # Check if local credentials file exists (created by GitHub Actions workflow step)
         creds_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials.json")
         
         if os.path.exists(creds_file):
-            # Authenticate directly using the file
             gc = gspread.service_account(filename=creds_file)
         else:
-            # Fallback for local execution using raw JSON string from .env
             raw_creds = os.environ.get("GCP_SA_KEY", "")
             if not raw_creds:
                 raise ValueError("Neither credentials.json nor GCP_SA_KEY is available!")
@@ -95,16 +86,14 @@ def update_sheet_status(row_number, status_value):
             gc = gspread.service_account_from_dict(creds_dict)
 
         sh = gc.open_by_key(SPREADSHEET_ID)
-        worksheet = sh.get_worksheet(0)  # Selects first tab/sheet
-        
-        # Column 3 corresponds to Column 'C'
+        worksheet = sh.get_worksheet(0)
         worksheet.update_cell(row_number, 3, status_value)
         print(f"✅ Sheet updated successfully for row {row_number}.")
     except Exception as e:
         print(f"❌ Failed to update Google Sheet status: {e}")
 
 # ---------------------------------------------------------------------------
-# STEP 2: MODERATE & FORMAT WITH GEMINI API
+# STEP 2: GEMINI MODERATION
 # ---------------------------------------------------------------------------
 def process_with_gemini(text):
     print("Processing post with Gemini...")
@@ -154,10 +143,22 @@ def process_with_gemini(text):
     return json.loads(response.text)
 
 # ---------------------------------------------------------------------------
-# STEP 3: RENDER QUOTE IMAGE CARD USING PILLOW
+# STEP 3: RENDER QUOTE IMAGE CARD & CLEANUP OLD IMAGES
 # ---------------------------------------------------------------------------
-def generate_image(text, output_path="latest_post.jpg"):
-    print("Generating image card...")
+def generate_image(text):
+    # Remove older generated post images to prevent git repository bloat
+    for old_file in glob.glob("post_*.jpg"):
+        try:
+            os.remove(old_file)
+            print(f"Removed previous image: {old_file}")
+        except Exception as e:
+            print(f"Could not remove {old_file}: {e}")
+
+    # Create timestamped filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"post_{timestamp}.jpg"
+    
+    print(f"Generating image card: {filename}...")
     
     border_width = 100
     base_color = "#FFFFFF" 
@@ -177,7 +178,6 @@ def generate_image(text, output_path="latest_post.jpg"):
         font = ImageFont.truetype("DejaVuSans-Bold.ttf", 45)
     except IOError:
         font = ImageFont.load_default()
-        print("Warning: Default font used.")
 
     wrapped_lines = []
     max_line_width = 0
@@ -243,21 +243,20 @@ def generate_image(text, output_path="latest_post.jpg"):
         align="left"
     )
 
-    img.save(output_path)
-    print(f"Image saved to {output_path}")
+    img.save(filename)
+    print(f"Image saved to {filename}")
+    return filename
 
 # ---------------------------------------------------------------------------
-# STEP 4: PUBLISH TO INSTAGRAM VIA GRAPH API
+# STEP 4: PUBLISH TO INSTAGRAM
 # ---------------------------------------------------------------------------
-import time
-
-def publish_to_instagram(caption):
-    print("Publishing to Instagram...")
+def publish_to_instagram(filename, caption):
+    full_image_url = f"{BASE_IMAGE_URL}/{filename}"
+    print(f"Publishing to Instagram with image URL: {full_image_url}")
     
-    # 1. Create Media Container
     container_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media"
     container_payload = {
-        'image_url': IMAGE_URL,
+        'image_url': full_image_url,
         'caption': caption,
         'access_token': META_ACCESS_TOKEN
     }
@@ -270,7 +269,6 @@ def publish_to_instagram(caption):
     creation_id = res['id']
     print(f"Container created (ID: {creation_id}). Checking status...")
 
-    # 2. Poll Container Status until READY or timeout
     status_url = f"https://graph.instagram.com/v21.0/{creation_id}"
     status_params = {
         'fields': 'status_code,status',
@@ -279,7 +277,7 @@ def publish_to_instagram(caption):
 
     max_attempts = 10
     for attempt in range(max_attempts):
-        time.sleep(3)  # Wait 3 seconds between status checks
+        time.sleep(4)
         status_res = requests.get(status_url, params=status_params).json()
         status_code = status_res.get('status_code')
         
@@ -291,7 +289,6 @@ def publish_to_instagram(caption):
             print("Media processing failed on Instagram's side:", status_res)
             return False
 
-    # 3. Publish Container
     publish_url = f"https://graph.instagram.com/v21.0/{IG_USER_ID}/media_publish"
     publish_payload = {
         'creation_id': creation_id,
@@ -305,23 +302,42 @@ def publish_to_instagram(caption):
     else:
         print("Error publishing post:", pub_res)
         return False
+
 # ---------------------------------------------------------------------------
 # MAIN EXECUTION
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    raw_submission, row_number = get_pending_submission()
-    
-    if raw_submission and row_number:
-        ai_result = process_with_gemini(raw_submission)
+    # Stage 1: Prepare image & state file
+    if len(sys.argv) == 1:
+        raw_submission, row_number = get_pending_submission()
         
-        if ai_result.get("approved"):
-            generate_image(ai_result["card_text"])
-            success = publish_to_instagram(ai_result["caption"])
+        if raw_submission and row_number:
+            ai_result = process_with_gemini(raw_submission)
             
+            if ai_result.get("approved"):
+                filename = generate_image(ai_result["card_text"])
+                # Save execution state for Stage 2 (Publishing)
+                with open("pending_post.json", "w") as f:
+                    json.dump({
+                        "filename": filename,
+                        "caption": ai_result["caption"],
+                        "row_number": row_number
+                    }, f)
+            else:
+                print("Submission rejected by Gemini safety moderation.")
+                update_sheet_status(row_number, "rejected")
+
+    # Stage 2: Publish after Git commit/push is complete
+    elif len(sys.argv) > 1 and sys.argv[1] == "--publish":
+        if os.path.exists("pending_post.json"):
+            with open("pending_post.json", "r") as f:
+                data = json.load(f)
+            
+            success = publish_to_instagram(data["filename"], data["caption"])
             if success:
-                update_sheet_status(row_number, "posted")
+                update_sheet_status(data["row_number"], "posted")
             else:
                 print("Failed to publish image to Instagram.")
-        else:
-            print("Submission rejected by Gemini safety moderation.")
-            update_sheet_status(row_number, "rejected")
+            
+            # Clean up temporary execution state file
+            os.remove("pending_post.json")
