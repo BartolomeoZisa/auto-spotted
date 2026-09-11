@@ -133,7 +133,7 @@ def process_with_gemini(text):
     - `caption`: A short, engaging Instagram caption with 3-5 relevant hashtags. If rejected, put an empty string `""`.
     - Write `caption` in the same language as the submission.
     - There's a form to send spotted messages, not dms, so don't include "DM me" or "message me" in the caption.
-    - You have the current time in <CURRENT_TIME> for context. You may reference it in the caption/tags where relevant (e.g. day of week, morning/night vibe), but do not invent specific event times not mentioned in the submission.
+    - <CURRENT_TIME> is provided only as background context. Do not use it in the caption/tags unless necessary to understand the submission. If the submission contains no precise time, do not add one based on posting time (no dates, days, "tonight", morning/night vibe, etc.).
 
     OUTPUT REQUIREMENTS:
     - Respond STRICTLY with valid JSON.
