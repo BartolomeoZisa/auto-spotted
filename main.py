@@ -350,5 +350,7 @@ if __name__ == "__main__":
                 update_sheet_status(data["row_number"], "posted")
             else:
                 print("Failed to publish image to Instagram.")
-            
+
             os.remove("pending_post.json")
+            if not success:
+                sys.exit(1)
